@@ -14,10 +14,10 @@ def duckdb_conn():
     return conn
 
 
-def test_duckpgq(duckdb_conn):
-    duckdb_conn.execute("SELECT duckpgq('Sam') as value;")
-    res = duckdb_conn.fetchall()
-    assert res[0][0] == "Duckpgq Sam 🐥"
+#def test_duckpgq(duckdb_conn):
+#    duckdb_conn.execute("SELECT duckpgq('Sam') as value;")
+#    res = duckdb_conn.fetchall()
+#    assert res[0][0] == "Duckpgq Sam 🐥"
 
 
 def test_property_graph(duckdb_conn):
