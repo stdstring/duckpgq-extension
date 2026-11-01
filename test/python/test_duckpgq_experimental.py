@@ -52,3 +52,19 @@ class DuckpgqExperimentalTestCase(unittest.TestCase):
         res = self.duckdb_conn.fetchall()
         assert len(res) == 1
         assert res[0][0] is None
+
+    def test_cyclomatic_complexity(self):
+        self.duckdb_conn.execute("CREATE TABLE student_nodes (student_id BIGINT PRIMARY KEY, name VARCHAR)")
+        self.duckdb_conn.execute("CREATE TABLE friendship_edges (friend_from BIGINT, friend_to BIGINT)")
+        self.duckdb_conn.execute("INSERT INTO student_nodes VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+        self.duckdb_conn.execute("INSERT INTO friendship_edges VALUES (1, 2), (2, 3), (3, 1)")
+        self.duckdb_conn.execute("INSERT INTO student_nodes VALUES (4, 'David'), (5, 'Eve')")
+        self.duckdb_conn.execute("INSERT INTO friendship_edges VALUES (4, 5)")
+        self.duckdb_conn.execute("-CREATE PROPERTY GRAPH network_graph VERTEX TABLES (student_nodes) EDGE TABLES (friendship_edges SOURCE KEY (friend_from) REFERENCES student_nodes(student_id) DESTINATION KEY (friend_to) REFERENCES student_nodes(student_id) )")
+        self.duckdb_conn.execute("SELECT * FROM cyclomatic_complexity('network_graph')")
+        res = self.duckdb_conn.fetchall()
+        assert len(res) == 1
+        assert res[0][0] == 5
+        assert res[0][1] == 4
+        assert res[0][2] == 2
+        assert res[0][3] == 3

@@ -1,18 +1,28 @@
 #pragma once
 
 #include "duckpgq/common.hpp"
-
 #include "duckpgq/core/utils/duckpgq_utils.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+
+// Подключаем родной заголовочный файл расширения duckpgq
+#include "duckpgq_extension.hpp"
 
 namespace duckdb {
 
-struct ExperimentalGlobalState : public GlobalTableFunctionState {
+struct ExperimentalGlobalState : GlobalTableFunctionState {
     bool finished = false;
 };
 
 // get graph name
-struct GetGraphNameBindData : public TableFunctionData {
+struct GetGraphNameBindData : TableFunctionData {
     string graph_name;
     bool graph_exists = false;
 };
@@ -65,7 +75,7 @@ public:
 };
 
 // count graph nodes
-struct CountNodesBindData : public TableFunctionData {
+struct CountNodesBindData : TableFunctionData {
     int64_t node_count = 0;
     bool graph_exists = false;
 };
@@ -120,6 +130,57 @@ public:
         output.SetCardinality(1);
         state.finished = true;
     }
+};
+
+struct CyclomaticComplexityBindData : FunctionData {
+    std::string graph_name;
+
+    explicit CyclomaticComplexityBindData(std::string const &name) : graph_name(name) {}
+
+    unique_ptr<FunctionData> Copy() const override {
+        return make_uniq<CyclomaticComplexityBindData>(graph_name);
+    }
+
+    bool Equals(const FunctionData &other) const override {
+        auto &other_data = other.Cast<CyclomaticComplexityBindData>();
+        return graph_name == other_data.graph_name;
+    }
+};
+
+class CyclomaticComplexityFunction : public TableFunction {
+public:
+    CyclomaticComplexityFunction() {
+        name = "cyclomatic_complexity";
+        arguments.push_back(LogicalType::VARCHAR);
+        bind = Bind;
+        function = Execute;
+        init_global = Init;
+    }
+
+    static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context,
+                                                     TableFunctionInitInput &input) {
+        return make_uniq<ExperimentalGlobalState>();
+    }
+
+    static unique_ptr<FunctionData> Bind(ClientContext &context,
+                                         TableFunctionBindInput &input,
+                                         vector<LogicalType> &return_types,
+                                         vector<string> &names) {
+        if (input.inputs.empty()) {
+            throw BinderException("graph name absent");
+        }
+        std::string graph_name = StringValue::Get(input.inputs[0]);
+        names.emplace_back("vertices");
+        return_types.emplace_back(LogicalType::BIGINT);
+        names.emplace_back("edges");
+        return_types.emplace_back(LogicalType::BIGINT);
+        names.emplace_back("components");
+        return_types.emplace_back(LogicalType::BIGINT);
+        names.emplace_back("complexity");
+        return_types.emplace_back(LogicalType::BIGINT);
+        return make_uniq<CyclomaticComplexityBindData>(graph_name);
+    }
+    static void Execute(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 };
 
 }
